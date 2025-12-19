@@ -1,8 +1,8 @@
 Flask
 numpy
 joblib
-torch
-# scikit-learn might be needed if vectorizer depends on it, but vectorizer.joblib is likely from sklearn.
-# Checking model_loader.py imports: uses joblib, numpy, torch. 
-# Safe to add scikit-learn just in case vectorizer needs it.
+# Use specific CPU version to avoid downloading massive GPU binaries which might spike memory/disk
+torch --index-url https://download.pytorch.org/whl/cpu
 scikit-learn
+# sentence-transformers is heavy. We might need a lighter alternative or stick with it but hope CPU torch saves us.
+sentence-transformers
