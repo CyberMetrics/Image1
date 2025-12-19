@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: ml-service
-        image: <YOUR_DOCKERHUB_USERNAME>/radar-ml:latest
+        image: cybermetrics/radar-ml:latest
         ports:
         - containerPort: 5001
         resources:

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: web-service
-        image: <YOUR_DOCKERHUB_USERNAME>/radar-web:latest
+        image: cybermetrics/radar-web:latest
         ports:
         - containerPort: 5000
         env:

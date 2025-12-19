@@ -1,0 +1,27 @@
+services:
+  # 1. Machine Learning Service
+  - type: web
+    name: radar-ml
+    env: python
+    rootDir: services/ml
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: PORT
+        value: 10000
+
+  # 2. Web UI Service
+  - type: web
+    name: radar-web
+    env: python
+    rootDir: services/web
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: ML_SERVICE_URL
+        fromService:
+          type: web
+          name: radar-ml
+          property: url
+      - key: MONGO_URI
+        sync: false # User will input this in dashboard for security
