@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  web:
+    build: ./services/web
+    ports:
+      - "5000:5000"
+    environment:
+      - ML_SERVICE_URL=http://ml-service:5001
+      - MONGO_URI=mongodb+srv://satishpakalapati59_db_user:satish@cluster0.7salcwk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+    depends_on:
+      - ml-service
+
+  ml-service:
+    build: ./services/ml
+    ports:
+      - "5001:5001"

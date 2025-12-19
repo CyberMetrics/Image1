@@ -1,0 +1,8 @@
+Flask
+numpy
+joblib
+torch
+# scikit-learn might be needed if vectorizer depends on it, but vectorizer.joblib is likely from sklearn.
+# Checking model_loader.py imports: uses joblib, numpy, torch. 
+# Safe to add scikit-learn just in case vectorizer needs it.
+scikit-learn

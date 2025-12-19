@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-service
+  template:
+    metadata:
+      labels:
+        app: web-service
+    spec:
+      containers:
+      - name: web-service
+        image: <YOUR_DOCKERHUB_USERNAME>/radar-web:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: ML_SERVICE_URL
+          value: "http://ml-service:5001"
+        - name: MONGO_URI
+          value: "mongodb+srv://satishpakalapati59_db_user:satish@cluster0.7salcwk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+spec:
+  selector:
+    app: web-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: LoadBalancer

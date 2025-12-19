@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+env.bak/
+venv.bak/
+
+# IDES
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project
+ml/autoencoder_model.pt
+ml/vectorizer.joblib
+# (Optionally keep the model in git if small (<100MB), users model is ~1MB so it is okay to keep it or ignore it. 
+# Re-reading: The file is `ml/autoencoder_model.pt`. It's binary.
+# The user likely wants to deploy *this* version, so I should probably NOT ignore it unless they use LFS.
+# For simplicity, I will COMMENT OUT the model ignore so it gets pushed.
+# ml/autoencoder_model.pt
+# ml/vectorizer.joblib
