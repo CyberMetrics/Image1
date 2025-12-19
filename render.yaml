@@ -22,6 +22,6 @@ services:
         fromService:
           type: web
           name: radar-ml
-          property: url
+          property: hostport
       - key: MONGO_URI
         sync: false # User will input this in dashboard for security

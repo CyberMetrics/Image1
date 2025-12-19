@@ -4,6 +4,8 @@ import requests
 import os
 
 ML_SERVICE_URL = os.environ.get("ML_SERVICE_URL", "http://ml-service:5001")
+if not ML_SERVICE_URL.startswith("http"):
+    ML_SERVICE_URL = f"http://{ML_SERVICE_URL}"
 
 bp = Blueprint("stats", __name__)
 
