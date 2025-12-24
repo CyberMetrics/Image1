@@ -10,4 +10,5 @@ COPY . .
 
 EXPOSE 5001
 
-CMD ["python", "app.py"]
+ENV MALLOC_ARENA_MAX=2
+CMD sh -c "gunicorn app:app -w 1 -b 0.0.0.0:${PORT:-5001} --timeout 120"

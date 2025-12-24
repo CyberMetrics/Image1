@@ -22,6 +22,14 @@ def load_model(input_dim):
     return model
 
 
+GLOBAL_MODEL = None
+
+def load_cached_model(input_dim):
+    global GLOBAL_MODEL
+    if GLOBAL_MODEL is None:
+        GLOBAL_MODEL = load_model(input_dim)
+    return GLOBAL_MODEL
+
 def compute_score(log):
     """
     Compute anomaly score using reconstruction error.
@@ -29,10 +37,12 @@ def compute_score(log):
     vec = vectorize_log(log, encoder, scaler)
     input_dim = len(vec)
 
-    model = load_model(input_dim)
+    model = load_cached_model(input_dim)
 
     x = torch.tensor(vec, dtype=torch.float32)
-    out = model(x)
+    # Ensure no gradients are computed to save memory/time
+    with torch.no_grad():
+        out = model(x)
 
     mse = torch.mean((x - out) ** 2).item()
     return round(mse, 6)

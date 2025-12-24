@@ -6,3 +6,4 @@ torch --index-url https://download.pytorch.org/whl/cpu
 scikit-learn
 # sentence-transformers is heavy. We might need a lighter alternative or stick with it but hope CPU torch saves us.
 sentence-transformers
+gunicorn
