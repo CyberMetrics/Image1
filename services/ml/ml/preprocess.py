@@ -3,7 +3,17 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
 
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+
+# Global cache for the embedder
+_embedder = None
+
+def get_embedder():
+    global _embedder
+    if _embedder is None:
+        # Lazy load only when needed
+        _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embedder
 
 # Map text log levels → numbers
 LEVEL_MAP = {
@@ -56,6 +66,9 @@ def fit_vectorizer(logs):
 
 def vectorize_log(log, encoder, scaler):
     msg = log.get("message", "")
+    
+    # Use lazy loader
+    embedder = get_embedder()
     msg_emb = embedder.encode(msg)
 
     src = log.get("source", "")

@@ -1,15 +1,17 @@
 services:
-  # 1. Embed Service (Base Layer)
+  # 1. Embed Service (New)
   - type: web
     name: radar-embed
     env: python
     rootDir: services/embed
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app -w 1 -b 0.0.0.0:$PORT --timeout 120
+    startCommand: python app.py
     plan: free
     envVars:
       - key: PORT
         value: 10000
+      - key: SECRET_KEY
+        generateValue: true
 
   # 2. Machine Learning Service (Middle Layer)
   - type: web
@@ -17,7 +19,7 @@ services:
     env: python
     rootDir: services/ml
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app -w 1 -b 0.0.0.0:$PORT --timeout 120
+    startCommand: python app.py
     plan: free
     envVars:
       - key: MALLOC_ARENA_MAX
@@ -31,7 +33,7 @@ services:
     env: python
     rootDir: services/web
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app -w 1 -b 0.0.0.0:$PORT --timeout 120
+    startCommand: python app.py
     plan: free
     envVars:
       - key: ML_SERVICE_URL
@@ -41,17 +43,3 @@ services:
           property: hostport
       - key: MONGO_URI
         sync: false # User will input this in dashboard for security
-
-  # 4. Embedding Service (New)
-  - type: web
-    name: radar-embed-new
-    env: python
-    rootDir: services/embed
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app -w 1 -b 0.0.0.0:$PORT --timeout 120
-    plan: free
-    envVars:
-      - key: PORT
-        value: 10000
-      - key: SECRET_KEY
-        generateValue: true
