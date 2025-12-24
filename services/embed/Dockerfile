@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 5002
 
-CMD ["gunicorn", "app:app", "-w", "1", "-b", "0.0.0.0:5002", "--timeout", "120"]
+CMD sh -c "gunicorn app:app -w 1 -b 0.0.0.0:${PORT:-5002} --timeout 120"
