@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+CMD ["gunicorn", "app:app", "-w", "1", "-b", "0.0.0.0:5000", "--timeout", "120"]
