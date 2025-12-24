@@ -21,4 +21,5 @@ if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 5001))
     # Run on port 5001 locally, or whatever the cloud provider assigns
+    print(f"Starting ML Service on port {port}...")
     app.run(host="0.0.0.0", port=port)

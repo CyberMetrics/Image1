@@ -8,5 +8,5 @@ MONGO_URI = (
 MONGO_DB = "RADAR"
 MONGO_COLLECTION = "Event_Logs"
 
-MODEL_PATH = "ml/autoencoder_model.keras"
+MODEL_PATH = "ml/autoencoder_model.pt"
 VECTORIZER_PATH = "ml/vectorizer.joblib"
