@@ -1,3 +1,6 @@
 Flask
 gunicorn
 python-dotenv
+# Optimize for Render Free Tier (512MB RAM)
+torch --index-url https://download.pytorch.org/whl/cpu
+sentence-transformers
