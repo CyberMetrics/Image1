@@ -11,16 +11,36 @@ bp = Blueprint("stats", __name__)
 
 @bp.route("/api/stats")
 def stats():
+    from flask import request, session
+    from database.mongo import collection, db, find_user_collection
+    
+    view = request.args.get("view", "public")
+    target_col = collection
+    
+    if view == "private":
+        user = session.get("user")
+        if user:
+            found_col = find_user_collection(user)
+            if found_col:
+                target_col = db[found_col]
+            else:
+                target_col = None
+        else:
+            target_col = None
+
+    if target_col is None:
+        return jsonify({"db_total": 0, "session_max": 0.0})
+
     try:
-        total = COLL.count_documents({})
+        total = target_col.count_documents({})
     except Exception:
         total = 0
 
-    # Lightweight session max: compute across recent N documents (to avoid scanning full DB)
+    # Lightweight session max: compute across recent N documents
     session_max = 0.0
     try:
         # Lower limit to 50 for performance since we are making HTTP requests
-        recent = list(COLL.find().sort("_id", -1).limit(50))
+        recent = list(target_col.find().sort("_id", -1).limit(50))
         for d in recent:
             try:
                 # score = float(compute_score(d))

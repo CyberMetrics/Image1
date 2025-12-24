@@ -27,7 +27,7 @@
         }
 
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg-core); font-family: 'JetBrains Mono'; color: var(--text-main); overflow-y: auto; overflow-x: hidden; }
-        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #666; border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: var(--c-safe); }
 
         #star-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
         .bg-grid { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; }
@@ -95,6 +95,10 @@
         /* small table in modal */
         .modal-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 15px; }
         .modal-table th, .modal-table td { padding: 8px; border-bottom: 1px solid #222; text-align: left; }
+        
+        /* Chart Scrollbar Wrapper */
+        .chart-scroll-wrapper { width: 100%; height: 100%; overflow-x: auto; overflow-y: hidden; position: relative; }
+        .chart-body { height: 100%; min-width: 100%; position: relative; }
     </style>
 </head>
 <body>
@@ -111,9 +115,18 @@
             <button id="btn-live" class="active" onclick="setMode('buffer')">LIVE STREAM</button>
             <button id="btn-today" onclick="setMode('today')">24 HOURS</button>
             <button id="btn-week" onclick="setMode('week')">7 DAYS</button>
+            
+            <div style="display:inline-flex; align-items:center; margin-left:15px; gap:5px;">
+                <input type="date" id="dateStart" style="background:#000; color:#888; border:1px solid #333; font-family:'JetBrains Mono'; padding:5px;">
+                <span style="color:#444">-</span>
+                <input type="date" id="dateEnd" style="background:#000; color:#888; border:1px solid #333; font-family:'JetBrains Mono'; padding:5px;">
+                <button onclick="applyCustomDate()" style="margin:0; font-size:0.7rem; padding:6px 10px;">APPLY</button>
+            </div>
 
-            <button onclick="window.location.href='/forensics'"
-                style="border-color: #FF0055; color: #FF0055; margin-left: 20px;">[ OPEN FORENSICS ]</button>
+            <div class="toggle-group" style="margin-left: 20px; display:inline-flex; border:1px solid #333;">
+                <button id="view-public" class="active" onclick="setView('public')" style="margin:0; border:none; border-right:1px solid #333;">PUBLIC</button>
+                <button id="view-private" onclick="setView('private')" style="margin:0; border:none;">PRIVATE</button>
+            </div>
 
             <label style="margin-left:15px; font-size:0.7rem; cursor:pointer; color:#888;">
                 <input type="checkbox" id="sampleToggle" checked> LIMIT DATA (200)
@@ -144,7 +157,13 @@
                 </div>
             </div>
 
-            <div style="flex:1; position:relative;"><canvas id="mainChart"></canvas></div>
+            <div style="flex:1; position:relative; overflow:hidden;">
+                <div class="chart-scroll-wrapper" id="mainChartWrapper">
+                    <div class="chart-body" id="mainChartBody">
+                        <canvas id="mainChart"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="panel">
@@ -212,15 +231,35 @@
 <!-- ===================== SCRIPTS (charts + SSE + UI) ===================== -->
 <script>
 /* Globals and configuration */
-const STREAM_URL = "/api/stream/logs";
+const STREAM_URL_BASE = "/api/stream/logs";
 const STATS_URL = "/api/stats";
 const LATEST_URL = "/api/latest";
 const ANOMALIES_URL = "/api/anomalies";
 
 let MODE = 'buffer';
+let VIEW_MODE = 'public'; // public | private
 let LIMIT_SAMPLE = true;
-let currentChartData = []; // ordered array of records (oldest -> newest)
-const MAX_POINTS = 200;
+let eventSource = null;
+let currentChartData = [];
+
+function setView(view) {
+    if (VIEW_MODE === view) return;
+    VIEW_MODE = view;
+    
+    // UI update
+    document.getElementById('view-public').classList.toggle('active', view === 'public');
+    document.getElementById('view-private').classList.toggle('active', view === 'private');
+    
+    // Reset data
+    currentChartData = [];
+    document.querySelector('#rawTable tbody').innerHTML = '';
+    
+    // Restart stream and fetch
+    if (eventSource) eventSource.close();
+    startStream();
+    fetchInitial();
+}
+const MAX_POINTS = 50;
 
 /* Utility: safe parse */
 function safeParse(s){ try { return JSON.parse(s); } catch(e) { return {}; } }
@@ -275,6 +314,7 @@ function openDetailModal(r) {
         <div class="detail-row"><span class="detail-label">Asset</span><span class="detail-val">${r.asset_id}</span></div>
         <div class="detail-row"><span class="detail-label">Protocol</span><span class="detail-val">${r.protocol}</span></div>
         <div class="detail-row"><span class="detail-label">Service</span><span class="detail-val">${r.service}</span></div>
+        <div class="detail-row"><span class="detail-label">Source</span><span class="detail-val">${VIEW_MODE.toUpperCase()}</span></div>
         <div class="detail-row"><span class="detail-label">Severity</span><span class="detail-val">${r.severity}</span></div>
         <div class="detail-row"><span class="detail-label">Score</span><span class="detail-val">${(r.score).toFixed(6)}</span></div>
         <pre>${(r.raw_data||"").replace(/</g,"&lt;").slice(0,20000)}</pre>
@@ -326,7 +366,9 @@ function initMainChart() {
                 x: { ticks: { color: "#777" }, grid: { color: "#222" } },
                 y: { ticks: { color: "#777" }, grid: { color: "#222" } }
             },
-            plugins: { legend: { labels: { color: "white" } } },
+            plugins: { 
+                legend: { labels: { color: "white" } }
+            },
             onClick: function(evt, elements){ chartClickHandler(evt, elements); },
             maintainAspectRatio: false
         }
@@ -399,10 +441,11 @@ function initScatter3D() {
 function updateKPIs(stats = {}, latestRec = null){
     try {
         if (!stats || typeof stats !== "object") stats = {};
-        const totalLogs = stats.total_logs ?? stats.db_total ?? stats.count ?? 0;
+        // only update if we have a valid stat value
+        const totalLogs = stats.total_logs ?? stats.db_total ?? stats.count;
 
         const dbTotalEl = document.getElementById('val-db-total');
-        if (dbTotalEl) dbTotalEl.innerText = totalLogs;
+        if (dbTotalEl && totalLogs !== undefined) dbTotalEl.innerText = totalLogs;
 
         const viewTotalEl = document.getElementById('val-view-total');
         if (viewTotalEl) viewTotalEl.innerText = currentChartData.length;
@@ -505,6 +548,7 @@ function processRecord(raw) {
     const r = normalizeRecord(raw);
 
     // push into buffer
+    if (currentChartData.some(x => x.id === r.id)) return;
     currentChartData.push(r);
 
     // --- MAIN LINE CHART ---
@@ -515,12 +559,31 @@ function processRecord(raw) {
             ch.data.labels.push(label);
             ch.data.datasets[0].data.push(r.score);
 
-            // keep window size aligned for both chart and buffer
-            if (ch.data.labels.length > MAX_POINTS) {
-                ch.data.labels.shift();
-                ch.data.datasets[0].data.shift();
-                if (currentChartData.length > MAX_POINTS) currentChartData.shift();
+            // Dynamic Width Logic for Scrollbar
+            const wrapper = document.getElementById('mainChartWrapper');
+            const body = document.getElementById('mainChartBody');
+            if (wrapper && body) {
+                const totalPoints = ch.data.labels.length;
+                // User wants "only 10 logs clearly". 
+                // If container is ~800px, 10 items => 80px per item.
+                const pointWidth = 80; 
+                const neededWidth = totalPoints * pointWidth;
+                
+                // Expand the chart body width beyond container to force scroll
+                body.style.width = Math.max(wrapper.clientWidth, neededWidth) + "px";
+                
+                // Auto-scroll to end ONLY if user is already near the end (Sticky Scroll)
+                // This prevents "fighting" the user if they scroll back to inspect history
+                if (MODE === 'buffer') {
+                    const isAtEnd = (wrapper.scrollWidth - wrapper.scrollLeft) <= (wrapper.clientWidth + 150);
+                    if (isAtEnd) {
+                        requestAnimationFrame(() => {
+                            wrapper.scrollLeft = wrapper.scrollWidth;
+                        });
+                    }
+                }
             }
+
             ch.update('none');
         } else {
             if (currentChartData.length > MAX_POINTS) currentChartData.shift();
@@ -618,8 +681,8 @@ function processRecord(raw) {
 async function fetchInitial(){
     try {
         const [sResp, lResp] = await Promise.all([
-            fetch(STATS_URL).then(r=>r.json()).catch(()=>({})),
-            fetch(LATEST_URL).then(r=>r.json()).catch(()=>({}))
+            fetch(STATS_URL + "?view=" + VIEW_MODE).then(r=>r.json()).catch(()=>({})),
+            fetch(LATEST_URL + "?view=" + VIEW_MODE).then(r=>r.json()).catch(()=>({}))
         ]);
         const stats = sResp || {};
         const latest = (lResp && (lResp.data || lResp)) || null;
@@ -631,10 +694,11 @@ async function fetchInitial(){
 /* Start SSE stream */
 function startStream(){
     try {
-        const evt = new EventSource(STREAM_URL);
-        evt.onopen = () => console.log("SSE connected");
-        evt.onerror = (err) => { console.warn("SSE err", err); };
-        evt.onmessage = (e) => {
+        if (eventSource) eventSource.close();
+        eventSource = new EventSource(STREAM_URL_BASE + "?view=" + VIEW_MODE);
+        eventSource.onopen = () => console.log("SSE connected (" + VIEW_MODE + ")");
+        eventSource.onerror = (err) => { console.warn("SSE err", err); };
+        eventSource.onmessage = (e) => {
             try {
                 const payload = safeParse(e.data);
                 processRecord(payload);
@@ -648,7 +712,7 @@ function startStream(){
 /* Poll fallback for servers that don't support SSE */
 async function pollFallback() {
     try {
-        const res = await fetch(ANOMALIES_URL + "?page=1&sample=15").then(r=>r.json()).catch(()=>null);
+        const res = await fetch(ANOMALIES_URL + "?page=1&sample=15&view=" + VIEW_MODE).then(r=>r.json()).catch(()=>null);
         if (!res) return;
         const rows = res.anomalies || (res.data ? (Array.isArray(res.data) ? res.data : [res.data]) : null);
         if (rows) rows.slice(0, LIMIT_SAMPLE ? 200 : rows.length).forEach(x => processRecord(normalizeRecord(x)));
@@ -661,21 +725,86 @@ function setMode(m) {
     document.getElementById('btn-live')?.classList.remove('active');
     document.getElementById('btn-today')?.classList.remove('active');
     document.getElementById('btn-week')?.classList.remove('active');
+    
     if (m === 'buffer') document.getElementById('btn-live')?.classList.add('active');
     if (m === 'today') document.getElementById('btn-today')?.classList.add('active');
     if (m === 'week') document.getElementById('btn-week')?.classList.add('active');
 
-    currentChartData = [];
-    if (m === 'today' || m === 'week') {
-        (async ()=>{
-            try {
-                const rng = m === 'today' ? 'day' : 'week';
-                const res = await fetch(ANOMALIES_URL + `?page=1&range=${rng}&sample=200`).then(r=>r.json()).catch(()=>null);
-                const rows = res?.anomalies || (res?.data ? (Array.isArray(res.data) ? res.data : [res.data]) : null);
-                if (rows) rows.forEach(r => processRecord(normalizeRecord(r)));
-            } catch(e){ console.warn("historical fetch err", e); }
-        })();
+    if (m === 'buffer') {
+        startStream();
+        return;
+    } else {
+        if(eventSource) eventSource.close();
     }
+
+    currentChartData = [];
+    document.querySelector('#rawTable tbody').innerHTML = '';
+
+    // Clear main chart visuals
+    if (window.charts && window.charts.main) {
+        window.charts.main.data.labels = [];
+        window.charts.main.data.datasets[0].data = [];
+        window.charts.main.update();
+    }
+
+    // Fetch logic
+    (async ()=>{
+        try {
+            let url = ANOMALIES_URL + `?view=${VIEW_MODE}&per_page=200`;
+            
+            if (m === 'today') {
+                url += "&range=day";
+            } else if (m === 'week') {
+                url += "&range=week";
+            }
+
+            const res = await fetch(url).then(r=>r.json()).catch(()=>null);
+            const rows = res?.anomalies || (res?.data ? (Array.isArray(res.data) ? res.data : [res.data]) : null);
+            
+            if (rows && rows.length > 0) {
+                 rows.forEach(r => processRecord(normalizeRecord(r)));
+                 // Auto-scroll to end (latest)
+                 setTimeout(() => {
+                     const wrapper = document.getElementById('mainChartWrapper');
+                     if(wrapper) wrapper.scrollLeft = wrapper.scrollWidth;
+                 }, 300);
+            } else {
+                 console.log("No data found for mode", m);
+            }
+        } catch(e){ console.warn("fetch mode err", e); }
+    })();
+}
+
+/* Custom Date Range */
+function applyCustomDate() {
+    const s = document.getElementById('dateStart').value;
+    const e = document.getElementById('dateEnd').value;
+    if (!s || !e) return alert("Select start and end dates");
+
+    setMode('custom'); // clear buttons, stop stream if running
+
+    // Clear explicitly again as setMode('custom') does it too
+    
+    // Convert to ISO (approx)
+    const tStart = new Date(s).toISOString();
+    const tEnd = new Date(e + "T23:59:59").toISOString();
+
+    (async () => {
+        try {
+            const url = ANOMALIES_URL + `?start=${tStart}&end=${tEnd}&per_page=500&view=${VIEW_MODE}`;
+            const res = await fetch(url).then(r => r.json()).catch(() => null);
+            const rows = res?.anomalies || (res?.data ? (Array.isArray(res.data) ? res.data : [res.data]) : null);
+            if (rows && rows.length) {
+                rows.forEach(r => processRecord(normalizeRecord(r)));
+                setTimeout(() => {
+                     const wrapper = document.getElementById('mainChartWrapper');
+                     if(wrapper) wrapper.scrollLeft = wrapper.scrollWidth;
+                }, 300);
+            } else {
+                alert("No logs found in this range.");
+            }
+        } catch (err) { console.warn("custom date err", err); }
+    })();
 }
 
 /* Wire sample toggle */
@@ -697,238 +826,7 @@ document.addEventListener("DOMContentLoaded", function(){
     // initial data + stream
     fetchInitial();
     setMode('buffer');
-    startStream();
-    setInterval(pollFallback, 8000);
 });
-</script>
-<script>
-    /* DASHBOARD v3 — FULL FUNCTIONALITY
------------------------------------------------------- */
-
-const API_STATS   = "/api/stats";
-const API_LATEST  = "/api/latest";
-const API_STREAM  = "/api/stream/logs";
-const API_ANOMS   = "/api/anomalies";
-
-let MODE = "live";  // live | day | week
-
-let chartData = [];
-let pieData = { High:0, Medium:0, Low:0, Safe:0 };
-
-const tb = document.querySelector("#rawTable tbody");
-
-/* ----------------------------------------------------
-   1. NORMALIZE RECORD
----------------------------------------------------- */
-function normalize(r) {
-    if (!r) return null;
-
-    return {
-        id:          r.id || "",
-        timestamp:   r.timestamp || "",
-        asset_id:    r.asset_id || "UNKNOWN",
-        protocol:    r.protocol || "SYS",
-        service:     r.service || "Unknown",
-        score:       r.score ?? r.anomaly_score ?? 0,
-        severity:    r.severity || "Safe",
-        raw_data:    r.raw_data || "",
-        is_anomaly:  r.is_anomaly ?? false
-    };
-}
-
-/* ----------------------------------------------------
-   2. KPI UPDATE
----------------------------------------------------- */
-function updateKPIs(stats, latest) {
-    if (!stats) stats = {};
-    if (!latest) latest = {};
-
-    const safe = (id) => document.getElementById(id);
-
-    safe("val-db-total").innerText  = stats.total_logs || 0;
-    safe("val-view-total").innerText = chartData.length;
-
-    safe("val-score").innerText = (latest.score ?? 0).toFixed(4);
-    safe("val-anom").innerText  = chartData.filter(x=>x.is_anomaly).length;
-}
-
-/* ----------------------------------------------------
-   3. MAIN LINE CHART UPDATE
----------------------------------------------------- */
-function refreshLineChart() {
-    if (!charts.main) return;
-
-    charts.main.data.labels = chartData.map(x => x.timestamp.split("T")[1] || "");
-    charts.main.data.datasets[0].data = chartData.map(x => x.score);
-
-    charts.main.update("none");
-}
-
-/* POINT CLICK HANDLING */
-function attachLineClick() {
-    charts.main.options.onClick = (e, items) => {
-        if (!items.length) return;
-        const idx = items[0].index;
-        openModal(chartData[idx]);
-    };
-}
-
-/* ----------------------------------------------------
-   4. PIE CHARTS UPDATE
----------------------------------------------------- */
-function resetPieCounts() {
-    pieData = { High:0, Medium:0, Low:0, Safe:0 };
-}
-
-function refreshPieCharts() {
-    if (!charts.pieMain) return;
-
-    const d = pieData;
-
-    charts.pieMain.data.datasets[0].data = [d.High, d.Medium, d.Low, d.Safe];
-    charts.pieMain.update("none");
-
-    charts.pieHigh.data.datasets[0].data = [d.High];
-    charts.pieHigh.update("none");
-
-    charts.pieMed.data.datasets[0].data = [d.Medium];
-    charts.pieMed.update("none");
-
-    charts.pieLow.data.datasets[0].data  = [d.Low];
-    charts.pieLow.update("none");
-}
-
-/* PIE CLICK → OPEN LIST OF ASSETS */
-function attachPieClicks() {
-    const pieMap = {
-        pieHigh:  "High",
-        pieMed:   "Medium",
-        pieLow:   "Low",
-        pieMain:  null  // allow global view
-    };
-
-    Object.keys(pieMap).forEach(id => {
-        charts[id].options.onClick = () => {
-            const sev = pieMap[id];
-            let list = chartData;
-
-            if (sev) list = list.filter(x => x.severity === sev);
-
-            if (!list.length) return alert("No logs for: " + sev);
-
-            openModal(list[0]);  // show first
-        };
-    });
-}
-
-/* ----------------------------------------------------
-   5. TABLE UPDATE
----------------------------------------------------- */
-function addRow(r) {
-    const tr = document.createElement("tr");
-
-    tr.innerHTML = `
-        <td style="color:#666">${r.timestamp.split("T")[1] || r.timestamp}</td>
-        <td>${r.id}</td>
-        <td style="color:#00E5FF">${r.asset_id}</td>
-        <td>${r.protocol}</td>
-        <td>${r.service}</td>
-        <td>${r.score.toFixed(4)}</td>
-        <td><span class="badge b-${r.severity}">${r.severity}</span></td>
-    `;
-
-    tb.insertBefore(tr, tb.firstChild);
-    while (tb.rows.length > 50) tb.deleteRow(-1);
-}
-
-/* ----------------------------------------------------
-   6. PROCESS RECORD
----------------------------------------------------- */
-function processRecord(raw) {
-    const r = normalize(raw);
-    if (!r) return;
-
-    chartData.push(r);
-    if (chartData.length > 500) chartData.shift();
-
-    pieData[r.severity]++;
-
-    addRow(r);
-
-    refreshLineChart();
-    refreshPieCharts();
-    updateKPIs({ total_logs: chartData.length }, r);
-}
-
-/* ----------------------------------------------------
-   7. MODE CHANGE (LIVE / 24 HOURS / 7 DAYS)
----------------------------------------------------- */
-async function loadMode(m) {
-    MODE = m;
-
-    resetPieCounts();
-    chartData = [];
-    tb.innerHTML = "";
-
-    let range = "all";
-    if (m === "day") range = "day";
-    if (m === "week") range = "week";
-
-    const resp = await fetch(`${API_ANOMS}?range=${range}&page=1&per_page=500`);
-    const data = await resp.json();
-
-    if (data.data && Array.isArray(data.data)) {
-        data.data.forEach(raw => processRecord(raw));
-    }
-
-    refreshPieCharts();
-    refreshLineChart();
-}
-
-/* ----------------------------------------------------
-   8. SSE STREAM
----------------------------------------------------- */
-function startSSE() {
-    if (MODE !== "live") return;
-
-    const evt = new EventSource(API_STREAM);
-
-    evt.onmessage = (e) => {
-        if (MODE !== "live") return;
-        processRecord(JSON.parse(e.data));
-    };
-}
-
-/* ----------------------------------------------------
-   9. INITIAL LOAD
----------------------------------------------------- */
-async function initDashboard() {
-    attachLineClick();
-    attachPieClicks();
-
-    await loadMode("live");
-    startSSE();
-}
-
-initDashboard();
-
-/* ----------------------------------------------------
-   10. MODE BUTTON HANDLERS
----------------------------------------------------- */
-window.setMode = function (m) {
-    document.querySelectorAll(".controls button").forEach(btn => btn.classList.remove("active"));
-
-    const map = {
-        live: ".controls button:nth-child(1)",
-        day:  ".controls button:nth-child(2)",
-        week: ".controls button:nth-child(3)"
-    };
-
-    document.querySelector(map[m]).classList.add("active");
-
-    loadMode(m);
-};
-
 </script>
 
 </body>

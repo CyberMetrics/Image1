@@ -3,3 +3,4 @@ Flask-Cors
 pymongo
 dnspython
 requests
+python-dotenv

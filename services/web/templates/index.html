@@ -30,7 +30,7 @@
       /* --- 1. SCROLLBAR & GLOBAL RESET --- */
       html {
         height: auto; min-height: 100%;
-        -ms-overflow-style: none; scrollbar-width: none;
+        /* -ms-overflow-style: none; scrollbar-width: none; */ 
       }
       body {
         margin: 0; padding: 0; width: 100%; min-height: 100vh;
@@ -40,7 +40,9 @@
         overflow-x: hidden;
         overflow-y: auto;
       }
-      ::-webkit-scrollbar { display: none; }
+      ::-webkit-scrollbar { width: 6px; } 
+      ::-webkit-scrollbar-thumb { background: #666; border-radius: 3px; } 
+      ::-webkit-scrollbar-thumb:hover { background: var(--accent-lime); }
 
       /* --- 2. BACKGROUND LAYERS --- */
       #star-canvas {
@@ -260,9 +262,15 @@
             The Next Evolution of SIEM.
           </p>
 
-          <a href="/dashboard" class="action-btn animate-fade">
-            [ Launch Dashboard ]
+          {% if logged_in %}
+          <a href="{{ url_for('dashboard') }}" class="action-btn animate-fade">
+            [ LAUNCH DASHBOARD ]
           </a>
+          {% else %}
+          <a href="{{ url_for('auth.login') }}" class="action-btn animate-fade">
+            [ LOGIN ]
+          </a>
+          {% endif %}
         </div>
       </section>
 
@@ -302,7 +310,7 @@
               <div style="flex:1">
                   <h3>PREDICTIVE AI</h3>
                   <p>Neural networks that predict attack vectors 40 minutes before execution.</p>
-                  <a href="/neural" class="neural-link">[ CONFIGURE MODEL ]</a>
+                  <span class="neural-link" style="opacity:0.5; cursor:not-allowed;">[ COMING SOON ]</span>
               </div>
             </div>
 
