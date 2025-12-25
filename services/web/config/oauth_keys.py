@@ -1,5 +1,8 @@
 # services/web/config/oauth_keys.py
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ==========================================
 # OAUTH CREDENTIALS
