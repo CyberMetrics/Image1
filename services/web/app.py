@@ -12,6 +12,11 @@ app = Flask(__name__, template_folder="templates", static_folder="assets")
 app.secret_key = "radar_secret_key_change_me_in_prod" # TODO: Use env var
 CORS(app)
 
+# Use ProxyFix to handle headers when behind a proxy (e.g. Render)
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+
 # -------------------------
 # AUTH HELPER
 # -------------------------

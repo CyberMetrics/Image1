@@ -1,17 +1,23 @@
 # services/web/config/oauth_keys.py
+import os
 
 # ==========================================
 # OAUTH CREDENTIALS
 # ==========================================
-# Replace the placeholders below with your actual Client IDs and Secrets.
 
 # GOOGLE
-GOOGLE_CLIENT_ID = "enter_your_google_client_id_here"
-GOOGLE_CLIENT_SECRET = "enter_your_google_client_secret_here"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
 
 # GITHUB
-GITHUB_CLIENT_ID = "enter_your_github_client_id_here"
-GITHUB_CLIENT_SECRET = "enter_your_github_client_secret_here"
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize"
+GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_USER_API = "https://api.github.com/user"
+GITHUB_USER_EMAIL_API = "https://api.github.com/user/emails"
 
 # FLASK SECURITY
-SECRET_KEY = "radar_secret_key_change_me_in_prod"
+SECRET_KEY = os.getenv("SECRET_KEY", "radar_secret_key_change_me_in_prod")
+
